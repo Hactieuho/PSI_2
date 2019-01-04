@@ -96,4 +96,4 @@ def TaiVeTatCa():
     # Dong file sau khi ghi
     testFile.close();
 
-UpDateDuLieu('Test.csv', date)
+TaiVeTatCa()
