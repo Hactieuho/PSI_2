@@ -8,7 +8,8 @@ import os
 import sys
 from constants import REGION, AQ_COL_NAMES
 from sklearn.model_selection import GridSearchCV
-from MyUtil import download_aq_data, fix_nat, get_date, lgbm_impute
+from MyUtil import download_aq_data, fix_nat, get_date, lgbm_impute,\
+    download_aq_data_to_concat
 from datetime import datetime
 import pickle
 
@@ -63,17 +64,7 @@ def main(mode: str='train'):
     if mode == 'impute':
         assert os.path.exists('models/bj_lgbm.pkl'), 'model not trained yet'
         bj_his = pd.read_csv(filepath_or_buffer='input/sing_aq_history.csv', parse_dates=['utc_time'])
-        end_date = get_date(pd.to_datetime(datetime.now()) + pd.Timedelta(1, 'D'))
-        bj_new = download_aq_data(
-            city='bj',
-            start_date='2018-04-01',
-            start_hour='00',
-            end_date=end_date,
-            end_hour='23',
-            save=False,
-            partial_data=False,
-            data_source='alternative'
-        )
+        bj_new = download_aq_data_to_concat()
         bj_new = bj_new.loc[bj_new.utc_time < pd.to_datetime('today') - pd.Timedelta(1, 'D')]
         bj_data = pd.concat([bj_his, bj_new], axis=0)
         bj_data = bj_data.loc[bj_data.stationId.isin(REGION)]

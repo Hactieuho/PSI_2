@@ -438,75 +438,17 @@ def download_aq_data_to_concat():
     "Ham nay lay tat ca du lieu muc do o nhiem tu 28/12/2018 den ngay hom nay"
     # Ngay dau tien lay du lieu
     start_time = datetime.date(2018, 12, 28)
-    # Ngay cuoi cung lay du lieu la ngay hom qua
+    # Ngay cuoi cung lay du lieu la ngay hom nay
     end_time = datetime.date.today()
     # Khoi tao danh sach ngay lay du lieu
     danh_sach_ngay_lay_du_lieu = [start_time + datetime.timedelta(days=x)
                                   for x in range((end_time-start_time).days + 1)]
-    sing_his_1 = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    for ngay_lay_du_lieu in danh_sach_ngay_lay_du_lieu:
-        # Tinh toan ngay lay du lieu hien tai
-        date = str(ngay_lay_du_lieu.day) + '/' + str(ngay_lay_du_lieu.month) + '/' + \
-            str(ngay_lay_du_lieu.year);
-        # Lan luot lay du lieu tung ngay
-        url = 'https://www.haze.gov.sg/resources/historical-readings/GetData/{}'.format(date)
-        request=requests.get(url)
-        # Phan tich ket qua tra ve
-        assert request.status_code == 200, 'Network error, status code = ' + str(request.status_code)
-        data = request.json()
-        # Toan bo du lieu json cua ngay hom do
-        airQuality = data['AirQualityList']
-        if airQuality == []:
-            # Neu khong co du lieu thi tiep tuc
-            continue
-        # Xoa nhung cot khong co du lieu di
-        for i in airQuality:
-            del i['PM25Reading']
-            del i['Date']
-            del i['Time']['Value']
-            # Chuan hoa thoi gian lay du lieu
-            time_text = i['Time']['Text'].split(':')[0]
-            if 'pm' in i['Time']['Text']:
-                time_text = int(time_text) + 12
-            i['Time']['Text'] = '{} {}:00:00'.format(ngay_lay_du_lieu.strftime('%Y-%m-%d'),time_text)
-            i['utc_time'] = i['Time']['Text']
-            del i['Time']['Text']
-        # Ghi cac dong du lieu vao file
-        df = pd.DataFrame.from_dict(json_normalize(airQuality), orient='columns')
-        # Sap xep lai thu tu cac cot
-        df = df[btl.constants.AQ_COL_NAMES]
-        sing_his_1 = sing_his_1.append(df, ignore_index=True)
-        print(str(ngay_lay_du_lieu))
-    # Doc du lieu tu file json da luu truoc do
-    sing_his_2 = pd.read_csv('../input/Singapore_aq_28_12_2018.csv')
-    # Sap xep lai thu tu cac cot
-    sing_his_2.columns = btl.constants.AQ_COL_NAMES
-    sing_his_2 = sing_his_2[btl.constants.AQ_COL_NAMES]
-    # Ghep 2 file du lieu
-    sing_his = pd.concat([sing_his_2, sing_his_1], axis = 0, sort=True)
-    # Sap xep lai thu tu cac cot
-    sing_his = sing_his[btl.constants.AQ_COL_NAMES]
-    # Luu vao file .csv
-    sing_his.to_csv('../test-json.csv', index=False)
-    # Tra ve file du lieu vua ghep
-    return sing_his
-'''Tai du lieu ve'''
-def download_aq_data():
-    "Ham nay lay tat ca du lieu muc do o nhiem tu 01/01/2009 den ngay hom qua"
-    # Ngay dau tien lay du lieu
-    start_time = datetime.date(2009, 1, 1)
-    # Ngay cuoi cung lay du lieu la ngay hom qua
-    end_time = datetime.date.today() - timedelta(1)
-    # Khoi tao danh sach ngay lay du lieu
-    danh_sach_ngay_lay_du_lieu = [start_time + datetime.timedelta(days=x)
-                                  for x in range((end_time-start_time).days + 1)]
     # Du lieu tung vung
-    north_datas = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    south_datas = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    east_datas = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    west_datas = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    central_datas = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    overalreading_datas = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
+    north_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    south_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    east_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    west_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    central_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
     for ngay_lay_du_lieu in danh_sach_ngay_lay_du_lieu:
         # Tinh toan ngay lay du lieu hien tai
         date = str(ngay_lay_du_lieu.day) + '/' + str(ngay_lay_du_lieu.month) + '/' + \
@@ -530,18 +472,93 @@ def download_aq_data():
             i['Time']['Text'] = '{} {}:00:00'.format(ngay_lay_du_lieu.strftime('%Y-%m-%d'),time_text)
             i['utc_time'] = i['Time']['Text']
             # Luu du lieu cac vung lai
-            df = pd.DataFrame([[i['utc_time'], 'North', i['MaxReading']['North']]], columns=btl.constants.AQ_COL_NAMES)
+            df = pd.DataFrame([[i['utc_time'], 'North', i['MaxReading']['North']]], columns=constants.AQ_COL_NAMES)
             north_datas = north_datas.append(df, ignore_index=True)
-            df = pd.DataFrame([[i['utc_time'], 'South', i['MaxReading']['South']]], columns=btl.constants.AQ_COL_NAMES)
+            df = pd.DataFrame([[i['utc_time'], 'South', i['MaxReading']['South']]], columns=constants.AQ_COL_NAMES)
             south_datas = south_datas.append(df, ignore_index=True)
-            df = pd.DataFrame([[i['utc_time'], 'East', i['MaxReading']['East']]], columns=btl.constants.AQ_COL_NAMES)
+            df = pd.DataFrame([[i['utc_time'], 'East', i['MaxReading']['East']]], columns=constants.AQ_COL_NAMES)
             east_datas = east_datas.append(df, ignore_index=True)
-            df = pd.DataFrame([[i['utc_time'], 'West', i['MaxReading']['West']]], columns=btl.constants.AQ_COL_NAMES)
+            df = pd.DataFrame([[i['utc_time'], 'West', i['MaxReading']['West']]], columns=constants.AQ_COL_NAMES)
             west_datas = west_datas.append(df, ignore_index=True)
-            df = pd.DataFrame([[i['utc_time'], 'Central', i['MaxReading']['Central']]], columns=btl.constants.AQ_COL_NAMES)
+            df = pd.DataFrame([[i['utc_time'], 'Central', i['MaxReading']['Central']]], columns=constants.AQ_COL_NAMES)
             central_datas = central_datas.append(df, ignore_index=True)
-            df = pd.DataFrame([[i['utc_time'], 'OverallReading', i['MaxReading']['OverallReading']]], columns=btl.constants.AQ_COL_NAMES)
-            overalreading_datas = overalreading_datas.append(df, ignore_index=True)
+        print(str(ngay_lay_du_lieu))
+    # Sap xep lai thu tu cac cot
+    north_datas = north_datas[constants.AQ_COL_NAMES]
+    south_datas = south_datas[constants.AQ_COL_NAMES]
+    east_datas = east_datas[constants.AQ_COL_NAMES]
+    west_datas = west_datas[constants.AQ_COL_NAMES]
+    central_datas = central_datas[constants.AQ_COL_NAMES]
+    # Ghep 6 file du lieu lai
+    final_df = pd.DataFrame(columns=constants.AQ_COL_NAMES).append(north_datas, ignore_index=True)
+    final_df = final_df.append(south_datas, ignore_index=True)
+    final_df = final_df.append(east_datas, ignore_index=True)
+    final_df = final_df.append(west_datas, ignore_index=True)
+    final_df = final_df.append(central_datas, ignore_index=True)
+    # Luu vao file .csv
+    final_df.to_csv('../test-json.csv', index=False)
+#     # Doc du lieu tu file json da luu truoc do
+#     sing_his_2 = pd.read_csv('../input/Singapore_aq_28_12_2018.csv')
+#     # Sap xep lai thu tu cac cot
+#     sing_his_2.columns = btl.constants.AQ_COL_NAMES
+#     sing_his_2 = sing_his_2[btl.constants.AQ_COL_NAMES]
+#     # Ghep 2 file du lieu
+#     sing_his = pd.concat([sing_his_2, sing_his_1], axis = 0, sort=True)
+#     # Sap xep lai thu tu cac cot
+#     sing_his = sing_his[btl.constants.AQ_COL_NAMES]
+#     # Luu vao file .csv
+#     sing_his.to_csv('../test-json.csv', index=False)
+    # Tra ve file du lieu vua ghep
+    return final_df
+'''Tai du lieu ve'''
+def download_aq_data():
+    "Ham nay lay tat ca du lieu muc do o nhiem tu 01/01/2009 den ngay hom qua"
+    # Ngay dau tien lay du lieu
+    start_time = datetime.date(2009, 1, 1)
+    # Ngay cuoi cung lay du lieu la ngay hom qua
+    end_time = datetime.date.today() - timedelta(1)
+    # Khoi tao danh sach ngay lay du lieu
+    danh_sach_ngay_lay_du_lieu = [start_time + datetime.timedelta(days=x)
+                                  for x in range((end_time-start_time).days + 1)]
+    # Du lieu tung vung
+    north_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    south_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    east_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    west_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    central_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    for ngay_lay_du_lieu in danh_sach_ngay_lay_du_lieu:
+        # Tinh toan ngay lay du lieu hien tai
+        date = str(ngay_lay_du_lieu.day) + '/' + str(ngay_lay_du_lieu.month) + '/' + \
+            str(ngay_lay_du_lieu.year);
+        # Lan luot lay du lieu tung ngay
+        url = 'https://www.haze.gov.sg/resources/historical-readings/GetData/{}'.format(date)
+        request=requests.get(url)
+        # Phan tich ket qua tra ve
+        assert request.status_code == 200, 'Network error, status code = ' + str(request.status_code)
+        data = request.json()
+        # Toan bo du lieu json cua ngay hom do
+        airQuality = data['AirQualityList']
+        if airQuality == []:
+            # Neu khong co du lieu thi tiep tuc
+            continue
+        for i in airQuality:
+            # Chuan hoa thoi gian lay du lieu
+            time_text = i['Time']['Text'].split(':')[0]
+            if 'pm' in i['Time']['Text']:
+                time_text = int(time_text) + 12
+            i['Time']['Text'] = '{} {}:00:00'.format(ngay_lay_du_lieu.strftime('%Y-%m-%d'),time_text)
+            i['utc_time'] = i['Time']['Text']
+            # Luu du lieu cac vung lai
+            df = pd.DataFrame([[i['utc_time'], 'North', i['MaxReading']['North']]], columns=constants.AQ_COL_NAMES)
+            north_datas = north_datas.append(df, ignore_index=True)
+            df = pd.DataFrame([[i['utc_time'], 'South', i['MaxReading']['South']]], columns=constants.AQ_COL_NAMES)
+            south_datas = south_datas.append(df, ignore_index=True)
+            df = pd.DataFrame([[i['utc_time'], 'East', i['MaxReading']['East']]], columns=constants.AQ_COL_NAMES)
+            east_datas = east_datas.append(df, ignore_index=True)
+            df = pd.DataFrame([[i['utc_time'], 'West', i['MaxReading']['West']]], columns=constants.AQ_COL_NAMES)
+            west_datas = west_datas.append(df, ignore_index=True)
+            df = pd.DataFrame([[i['utc_time'], 'Central', i['MaxReading']['Central']]], columns=constants.AQ_COL_NAMES)
+            central_datas = central_datas.append(df, ignore_index=True)
         # Cu 1 thang thi luu di lieu lai 1 lan
         tomorrow = ngay_lay_du_lieu - timedelta(1)
         if(tomorrow.month != ngay_lay_du_lieu.month):
@@ -550,22 +567,19 @@ def download_aq_data():
             east_datas.to_csv('../test-json-east.csv', index=False)
             west_datas.to_csv('../test-json-west.csv', index=False)
             central_datas.to_csv('../test-json-central.csv', index=False)
-            overalreading_datas.to_csv('../test-json-overalreading.csv', index=False)
         print(str(ngay_lay_du_lieu))
     # Sap xep lai thu tu cac cot
-    north_datas = north_datas[btl.constants.AQ_COL_NAMES]
-    south_datas = south_datas[btl.constants.AQ_COL_NAMES]
-    east_datas = east_datas[btl.constants.AQ_COL_NAMES]
-    west_datas = west_datas[btl.constants.AQ_COL_NAMES]
-    central_datas = central_datas[btl.constants.AQ_COL_NAMES]
-    overalreading_datas = overalreading_datas[btl.constants.AQ_COL_NAMES]
+    north_datas = north_datas[constants.AQ_COL_NAMES]
+    south_datas = south_datas[constants.AQ_COL_NAMES]
+    east_datas = east_datas[constants.AQ_COL_NAMES]
+    west_datas = west_datas[constants.AQ_COL_NAMES]
+    central_datas = central_datas[constants.AQ_COL_NAMES]
     # Ghep 6 file du lieu lai
-    final_df = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES).append(north_datas, ignore_index=True)
+    final_df = pd.DataFrame(columns=constants.AQ_COL_NAMES).append(north_datas, ignore_index=True)
     final_df = final_df.append(south_datas, ignore_index=True)
     final_df = final_df.append(east_datas, ignore_index=True)
     final_df = final_df.append(west_datas, ignore_index=True)
     final_df = final_df.append(central_datas, ignore_index=True)
-    final_df = final_df.append(overalreading_datas, ignore_index=True)
     # Luu vao file .csv
     final_df.to_csv('../test-json.csv', index=False)
     
