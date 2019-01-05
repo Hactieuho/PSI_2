@@ -61,8 +61,8 @@ def main(mode: str='train'):
         print('# ---- DONE ---- #')
 
     if mode == 'impute':
-        assert os.path.exists('../models/bj_lgbm.pkl'), 'model not trained yet'
-        bj_his = pd.read_csv(filepath_or_buffer='../input/bj_api_his.csv', parse_dates=['utc_time'])
+        assert os.path.exists('models/bj_lgbm.pkl'), 'model not trained yet'
+        bj_his = pd.read_csv(filepath_or_buffer='input/sing_aq_history.csv', parse_dates=['utc_time'])
         end_date = get_date(pd.to_datetime(datetime.now()) + pd.Timedelta(1, 'D'))
         bj_new = download_aq_data(
             city='bj',
@@ -83,12 +83,12 @@ def main(mode: str='train'):
         bj_data = lgbm_impute(data=bj_data, city='bj')
         data = pd.concat([bj_data], axis=0)
         data = fix_nat(data)
-        data.to_csv('../input/lgb_imputed_new_source_2014-03-31-_{}.csv'.format('today'), index=False)
+        data.to_csv('input/lgb_imputed_new_source_2014-03-31-_{}.csv'.format('today'), index=False)
 
 
 if __name__ == '__main__':
     if len(sys.argv) == 1:
-        mode = 'train'
+        mode = 'impute'
     else:
         mode = str(sys.argv[1])
     assert mode in ['train', 'impute'], 'invalid mode'
