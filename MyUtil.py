@@ -120,35 +120,32 @@ def get_date(datetime_obj):
     return str(datetime_obj).split()[0]
 
 
-def lgbm_impute(data: pd.DataFrame, city: str, vprint=print) -> pd.DataFrame:
-    assert city in ['bj', 'ld'], 'invalid city'
-    assert os.path.exists('../models/{}_lgbm.pkl'.format(city)), 'lgb model not trained yet'
+def lgbm_impute(data: pd.DataFrame, vprint=print) -> pd.DataFrame:
+    assert os.path.exists('models/sing_lgbm.pkl'), 'lgb model not trained yet'
 
     vprint(1, 'impute data with lgbm')
     with suppress_stdout_stderr():
-        lgb_models = pickle.load(open('../models/{}_lgbm.pkl'.format(city), 'rb'))
-
-    if city == 'bj':
-        measures, stations, threshold = ['PM2.5', 'PM10', 'O3'], BEIJING_STATIONS, 17
-    else:
-        measures, stations, threshold = ['PM2.5', 'PM10'], LONDON_STATIONS, 6
-
+        lgb_models = pickle.load(open('models/sing_lgbm.pkl', 'rb'))
+    measure, regions, threshold = 'Value', REGION, 2
     dfs = {}
-    for measure in measures:
-        x_data = [data.loc[data.stationId == station, measure].values for station in stations]
-        x_data = pd.DataFrame(np.array(x_data)).T
-        x_data.columns = stations
-        dfs[measure] = x_data.copy()
-
-    for station in stations:
-        for measure in measures:
-            vprint(2, "impute {} {} - {} with lgb".format(city, station, measure))
-            value = dfs[measure][station].copy()
-            condition = value.isnull() & (dfs[measure].isnull().sum(axis=1) < threshold)
-            predicted = lgb_models['{}-{}'.format(station, measure)].\
-                predict(dfs[measure].loc[condition, [col for col in stations if col != station]])
-            value[condition] = predicted
-            data.loc[data['stationId'] == station, measure] = value.tolist()
+    x_data = [data.loc[data.Region == region, measure].values for region in regions]
+    x_data = pd.DataFrame(np.array(x_data)).T
+    x_data.columns = regions
+    dfs[measure] = x_data.copy()
+    for region in regions:
+        vprint(2, "impute {} - {} with lgb".format(region, measure))
+        value = dfs[measure][region].copy()
+        condition = [not i for i in value.isnull()] & (dfs[measure].isnull().sum(axis=1) < threshold)
+        predicted_temp = lgb_models['{}-{}'.format(region, measure)]
+        cols = []
+        for col in regions:
+            if col != region:
+                cols.append(col)
+        dfs_temp = dfs[measure].loc[condition, cols]
+        print(dfs_temp)
+        predicted = predicted_temp.predict(dfs_temp)
+        value[condition] = predicted
+        data.loc[data['Region'] == region, measure] = value.tolist()
     return data
 
 
@@ -226,22 +223,15 @@ def official_smape(actual, predicted):
 
 def fix_nat(data: pd.DataFrame) -> pd.DataFrame:
     df = data.copy()  # type: pd.DataFrame
-    df['PM2.5'] = df['PM2.5'].map(lambda x: x if str(x) != 'NaT' else np.nan)
-    df['PM10'] = df['PM10'].map(lambda x: x if str(x) != 'NaT' else np.nan)
-    df['O3'] = df['O3'].map(lambda x: x if str(x) != 'NaT' else np.nan)
+    df['Value'] = df['Value'].map(lambda x: x if str(x) != 'NaT' else np.nan)
     return df
 
 
-def long_to_wide(data, index='stationId', columns='utc_time'):
+def long_to_wide(data, index='Region', columns='utc_time'):
     df = data.copy()  # type: pd.DataFrame
-    pm25data = df.pivot(index=index, columns=columns, values='PM2.5').reset_index()
-    pm25data.stationId = pm25data.stationId.map(lambda x: x + '#PM2.5#')
-    pm10data = df.pivot(index=index, columns=columns, values='PM10').reset_index()
-    pm10data.stationId = pm10data.stationId.map(lambda x: x + '#PM10#')
-    o3data = df.loc[~df.stationId.isin(LONDON_STATIONS)].pivot(index=index, columns=columns, values='O3').reset_index()
-    o3data.stationId = o3data.stationId.map(lambda x: x + '#O3#')
-    wdata = pd.concat([pm25data, pm10data, o3data], axis=0)
-    return wdata
+    data = df.pivot(index=index, columns=columns, values='Value').reset_index()
+    data.Region = pm25data.stationId.map(lambda x: x + '#Value#')
+    return data
 
 
 def wide_fw_x_y_split(wdata, history_length, split_date, for_prediction=False):
@@ -387,68 +377,18 @@ def get_date_col_index(dataframe, day):
         return idx
     return None
 
-'''Ham update file du lieu'''
-def UpDateDuLieu(fileName, start_time):
-    "Ham nay cap nhat du lieu muc do o nhiem tu ngay truyen vao den ngay hom qua"
-    print('Ngay truyen vao: ' + start_time)
-    # Ngay cuoi cung lay du lieu la ngay hom qua
-    end_time = datetime.date.today() - timedelta(1)
-    # Khoi tao danh sach ngay lay du lieu
-    danh_sach_ngay_lay_du_lieu = [start_time + datetime.timedelta(days=x)
-                                  for x in range((end_time-start_time).days + 1)]
-    final_df = pd.DataFrame(columns=btl.constants.AQ_COL_NAMES);
-    for ngay_lay_du_lieu in danh_sach_ngay_lay_du_lieu:
-        # Tinh toan ngay lay du lieu hien tai
-        date = str(ngay_lay_du_lieu.day) + '/' + str(ngay_lay_du_lieu.month) + '/' + \
-            str(ngay_lay_du_lieu.year);
-        # Lan luot lay du lieu tung ngay
-        url = 'https://www.haze.gov.sg/resources/historical-readings/GetData/{}'.format(date)
-        request=requests.get(url)
-        # Phan tich ket qua tra ve
-        assert request.status_code == 200, 'Network error, status code = ' + str(request.status_code)
-        data = request.json()
-        # Toan bo du lieu json cua ngay hom do
-        airQuality = data['AirQualityList']
-        if airQuality == []:
-            # Neu khong co du lieu thi tiep tuc
-            continue
-        # Xoa nhung cot khong co du lieu di
-        for i in airQuality:
-            del i['PM25Reading']
-            del i['Date']
-            del i['Time']['Value']
-        # Ghi cac dong du lieu vao file
-        df = pd.DataFrame.from_dict(json_normalize(data["AirQualityList"]), orient='columns')
-        # Luu ngay lay du lieu vao file
-        df['Day'] = str(ngay_lay_du_lieu)
-        # Sap xep lai thu tu cac cot
-        df = df[btl.constants.AQ_COL_NAMES]
-        final_df=final_df.append(df, ignore_index=True)
-        # Cu 1 thang thi luu di lieu lai 1 lan
-        tomorrow = ngay_lay_du_lieu - timedelta(1)
-        if(tomorrow.month != ngay_lay_du_lieu.month):
-            final_df.to_csv('../test-json.csv', index=False)
-        print(str(ngay_lay_du_lieu))
-    # Chen vao file .csv
-    with open(fileName, 'a') as f:
-        final_df.to_csv(f, header=False, index=False)
-
 ''' Ham nay lay du lieu tu 28/12/2018 den ngay hom qua va noi lai'''
 def download_aq_data_to_concat():
-    "Ham nay lay tat ca du lieu muc do o nhiem tu 28/12/2018 den ngay hom nay"
+    "Ham nay lay tat ca du lieu muc do o nhiem tu 07/01/2019 den ngay hom nay"
     # Ngay dau tien lay du lieu
-    start_time = datetime.date(2018, 12, 28)
+    start_time = datetime.date(2019, 1, 7)
     # Ngay cuoi cung lay du lieu la ngay hom nay
     end_time = datetime.date.today()
     # Khoi tao danh sach ngay lay du lieu
     danh_sach_ngay_lay_du_lieu = [start_time + datetime.timedelta(days=x)
                                   for x in range((end_time-start_time).days + 1)]
     # Du lieu tung vung
-    north_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    south_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    east_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    west_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    central_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    final_df = pd.DataFrame(columns=constants.AQ_COL_NAMES);
     for ngay_lay_du_lieu in danh_sach_ngay_lay_du_lieu:
         # Tinh toan ngay lay du lieu hien tai
         date = str(ngay_lay_du_lieu.day) + '/' + str(ngay_lay_du_lieu.month) + '/' + \
@@ -473,30 +413,20 @@ def download_aq_data_to_concat():
             i['utc_time'] = i['Time']['Text']
             # Luu du lieu cac vung lai
             df = pd.DataFrame([[i['utc_time'], 'North', i['MaxReading']['North']]], columns=constants.AQ_COL_NAMES)
-            north_datas = north_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'South', i['MaxReading']['South']]], columns=constants.AQ_COL_NAMES)
-            south_datas = south_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'East', i['MaxReading']['East']]], columns=constants.AQ_COL_NAMES)
-            east_datas = east_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'West', i['MaxReading']['West']]], columns=constants.AQ_COL_NAMES)
-            west_datas = west_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'Central', i['MaxReading']['Central']]], columns=constants.AQ_COL_NAMES)
-            central_datas = central_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
         print(str(ngay_lay_du_lieu))
     # Sap xep lai thu tu cac cot
-    north_datas = north_datas[constants.AQ_COL_NAMES]
-    south_datas = south_datas[constants.AQ_COL_NAMES]
-    east_datas = east_datas[constants.AQ_COL_NAMES]
-    west_datas = west_datas[constants.AQ_COL_NAMES]
-    central_datas = central_datas[constants.AQ_COL_NAMES]
-    # Ghep 6 file du lieu lai
-    final_df = pd.DataFrame(columns=constants.AQ_COL_NAMES).append(north_datas, ignore_index=True)
-    final_df = final_df.append(south_datas, ignore_index=True)
-    final_df = final_df.append(east_datas, ignore_index=True)
-    final_df = final_df.append(west_datas, ignore_index=True)
-    final_df = final_df.append(central_datas, ignore_index=True)
+    final_df = final_df[constants.AQ_COL_NAMES]
     # Luu vao file .csv
-    final_df.to_csv('../test-json.csv', index=False)
+    final_df.to_csv('../test-json-new.csv', index=False)
 #     # Doc du lieu tu file json da luu truoc do
 #     sing_his_2 = pd.read_csv('../input/Singapore_aq_28_12_2018.csv')
 #     # Sap xep lai thu tu cac cot
@@ -510,6 +440,7 @@ def download_aq_data_to_concat():
 #     sing_his.to_csv('../test-json.csv', index=False)
     # Tra ve file du lieu vua ghep
     return final_df
+	
 '''Tai du lieu ve'''
 def download_aq_data():
     "Ham nay lay tat ca du lieu muc do o nhiem tu 01/01/2009 den ngay hom qua"
@@ -520,21 +451,20 @@ def download_aq_data():
     # Khoi tao danh sach ngay lay du lieu
     danh_sach_ngay_lay_du_lieu = [start_time + datetime.timedelta(days=x)
                                   for x in range((end_time-start_time).days + 1)]
-    # Du lieu tung vung
-    north_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    south_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    east_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    west_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
-    central_datas = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    # Bien luu du lieu
+    final_df = pd.DataFrame(columns=constants.AQ_COL_NAMES);
+    # Duyet tung ngay de lay du lieu
     for ngay_lay_du_lieu in danh_sach_ngay_lay_du_lieu:
         # Tinh toan ngay lay du lieu hien tai
         date = str(ngay_lay_du_lieu.day) + '/' + str(ngay_lay_du_lieu.month) + '/' + \
             str(ngay_lay_du_lieu.year);
         # Lan luot lay du lieu tung ngay
         url = 'https://www.haze.gov.sg/resources/historical-readings/GetData/{}'.format(date)
+        # Gui get request len server
         request=requests.get(url)
         # Phan tich ket qua tra ve
         assert request.status_code == 200, 'Network error, status code = ' + str(request.status_code)
+        # Phan tich json tra ve
         data = request.json()
         # Toan bo du lieu json cua ngay hom do
         airQuality = data['AirQualityList']
@@ -545,43 +475,35 @@ def download_aq_data():
             # Chuan hoa thoi gian lay du lieu
             time_text = i['Time']['Text'].split(':')[0]
             if 'pm' in i['Time']['Text']:
-                time_text = int(time_text) + 12
+                if '12' in i['Time']['Text']:
+                    time_text = 12
+                else:
+                    time_text = int(time_text) + 12
+            else:
+                if '12' in i['Time']['Text']:
+                    time_text = 00
             i['Time']['Text'] = '{} {}:00:00'.format(ngay_lay_du_lieu.strftime('%Y-%m-%d'),time_text)
             i['utc_time'] = i['Time']['Text']
-            # Luu du lieu cac vung lai
+            # Chen du lieu cac vung vao bien luu du lieu
             df = pd.DataFrame([[i['utc_time'], 'North', i['MaxReading']['North']]], columns=constants.AQ_COL_NAMES)
-            north_datas = north_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'South', i['MaxReading']['South']]], columns=constants.AQ_COL_NAMES)
-            south_datas = south_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'East', i['MaxReading']['East']]], columns=constants.AQ_COL_NAMES)
-            east_datas = east_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'West', i['MaxReading']['West']]], columns=constants.AQ_COL_NAMES)
-            west_datas = west_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
             df = pd.DataFrame([[i['utc_time'], 'Central', i['MaxReading']['Central']]], columns=constants.AQ_COL_NAMES)
-            central_datas = central_datas.append(df, ignore_index=True)
+            final_df = final_df.append(df, ignore_index=True)
         # Cu 1 thang thi luu di lieu lai 1 lan
         tomorrow = ngay_lay_du_lieu - timedelta(1)
         if(tomorrow.month != ngay_lay_du_lieu.month):
-            north_datas.to_csv('../test-json-north.csv', index=False)
-            south_datas.to_csv('../test-json-south.csv', index=False)
-            east_datas.to_csv('../test-json-east.csv', index=False)
-            west_datas.to_csv('../test-json-west.csv', index=False)
-            central_datas.to_csv('../test-json-central.csv', index=False)
+            final_df.to_csv('input/sing_his_temp.csv', index=False)
         print(str(ngay_lay_du_lieu))
     # Sap xep lai thu tu cac cot
-    north_datas = north_datas[constants.AQ_COL_NAMES]
-    south_datas = south_datas[constants.AQ_COL_NAMES]
-    east_datas = east_datas[constants.AQ_COL_NAMES]
-    west_datas = west_datas[constants.AQ_COL_NAMES]
-    central_datas = central_datas[constants.AQ_COL_NAMES]
-    # Ghep 6 file du lieu lai
-    final_df = pd.DataFrame(columns=constants.AQ_COL_NAMES).append(north_datas, ignore_index=True)
-    final_df = final_df.append(south_datas, ignore_index=True)
-    final_df = final_df.append(east_datas, ignore_index=True)
-    final_df = final_df.append(west_datas, ignore_index=True)
-    final_df = final_df.append(central_datas, ignore_index=True)
+    final_df = final_df[constants.AQ_COL_NAMES]
     # Luu vao file .csv
-    final_df.to_csv('../test-json.csv', index=False)
+    final_df.to_csv('input/sing_his_final.csv', index=False)
     
 def get_city_data(*, city: str, impute_with_lgbm: bool=False, partial_data: bool=False, vprint=print,
                   get_new_data: bool=False) -> pd.DataFrame:
